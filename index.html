@@ -6,8 +6,8 @@
     <title>实况图 Live Photo 生成器</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdmirror.com/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/file-saver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdmirror.com/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdmirror.com/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -45,18 +45,19 @@
             <p class="text-gray-600">将视频转换或合并为动态照片效果</p>
         </header>
 
-        <main class="bg-white rounded-xl shadow-custom p-6 mb-8">
+        <main class="glass rounded-2xl shadow-custom p-4 md:p-8 mb-8">
             <!-- 上传区域 -->
             <section id="uploadSection" class="mb-8">
-                <div id="uploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors duration-300">
-                    <i class="fa fa-cloud-upload text-4xl text-gray-400 mb-4"></i>
-                    <h3 class="text-xl font-semibold text-gray-700 mb-2">拖放视频到这里</h3>
-                    <p class="text-gray-500 mb-4">或者</p>
-                    <label class="inline-block bg-primary text-white px-6 py-3 rounded-lg cursor-pointer hover:bg-primary/90 transition-colors duration-300">
+                <div id="uploadArea" class="border-2 border-dashed border-gray-200 rounded-xl p-8 md:p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 group">
+                    <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                        <i class="fa fa-cloud-upload text-3xl text-gray-400 group-hover:text-primary transition-colors"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">生成你的实况照片</h3>
+                    <p class="text-gray-500 mb-6">支持多种视频格式，保持 4K 画质</p>
+                    <label class="inline-block bg-primary text-white px-8 py-3 rounded-xl font-medium cursor-pointer hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95">
                         <span>选择视频文件</span>
                         <input type="file" id="fileInput" accept="video/*" class="hidden">
                     </label>
-                    <p class="text-gray-400 text-sm mt-4">支持 MP4, MOV, WebM 等格式</p>
                 </div>
             </section>
 
@@ -167,7 +168,8 @@
     <div id="notification" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg transform transition-all duration-300 opacity-0 translate-y-[-20px] z-50"></div>
 
     <!-- 第三方库 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdmirror.com/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdmirror.com/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     
     <!-- 核心功能脚本 -->
     <script src="script/core/video-processor.js" type="module"></script>

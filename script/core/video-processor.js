@@ -6,14 +6,29 @@ export class VideoProcessor {
     }
     
     async loadVideo(file) {
-        this.originalBlob = file; // 保存原始引用
-        this.isTrimmed = false;   // 记录是否被剪辑
+        this.originalBlob = file; 
+        this.isTrimmed = false;   
         return new Promise((resolve, reject) => {
+            if (this.videoElement.src) {
+                URL.revokeObjectURL(this.videoElement.src);
+            }
             const videoURL = URL.createObjectURL(file);
             this.videoElement.src = videoURL;
+            this.videoElement.load(); // 显式调用 load()，对移动端很重要
             
-            this.videoElement.onloadedmetadata = () => resolve(this.videoElement);
-            this.videoElement.onerror = (err) => reject(err);
+            // 设置 10 秒超时
+            const timeout = setTimeout(() => {
+                reject(new Error('视频加载超时，请检查文件格式或尝试更小的视频'));
+            }, 10000);
+
+            this.videoElement.onloadedmetadata = () => {
+                clearTimeout(timeout);
+                resolve(this.videoElement);
+            };
+            this.videoElement.onerror = () => {
+                clearTimeout(timeout);
+                reject(new Error('视频格式不支持或文件损坏'));
+            };
         });
     }
 

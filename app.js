@@ -142,13 +142,33 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function handleFileSelection(event) {
         selectedVideo = event.target.files[0];
-        await videoProcessor.loadVideo(selectedVideo);
-        videoPreview.src = URL.createObjectURL(selectedVideo);
-        coverImage = await videoProcessor.extractCoverFrame(0);
-        coverPreview.src = URL.createObjectURL(coverImage);
-        showSection(previewSection);
-        hideSection(uploadSection);
-        updateGenerateBtnVisibility(true);
+        if (!selectedVideo) return;
+
+        try {
+            // 显示加载状态
+            showNotification('正在加载视频, 请稍候...', 'info');
+            
+            // 加载视频元数据
+            await videoProcessor.loadVideo(selectedVideo);
+            
+            // 更新预览界面
+            videoPreview.src = URL.createObjectURL(selectedVideo);
+            
+            // 提取第一帧作为封面
+            coverImage = await videoProcessor.extractCoverFrame(0);
+            coverPreview.src = URL.createObjectURL(coverImage);
+            
+            showSection(previewSection);
+            hideSection(uploadSection);
+            updateGenerateBtnVisibility(true);
+            
+            showNotification('视频加载成功', 'success');
+        } catch (error) {
+            console.error('视频加载失败:', error);
+            showNotification(`加载失败: ${error.message}`, 'error');
+            // 重置输入框以便重新选择
+            fileInput.value = '';
+        }
     }
     
     async function generateLivePhoto() {
@@ -263,14 +283,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function resetApp() {
+        // 清理旧资源，防止内存泄漏
+        if (videoPreview.src) URL.revokeObjectURL(videoPreview.src);
+        if (coverPreview.src) URL.revokeObjectURL(coverPreview.src);
+        if (resultPreview.src) URL.revokeObjectURL(resultPreview.src);
+        
         selectedVideo = null;
         coverImage = null;
         fileInput.value = '';
         videoPreview.src = '';
         coverPreview.src = '';
+        resultPreview.src = '';
+        
+        const motionVideoPreview = document.getElementById('motionVideoPreview');
+        if (motionVideoPreview) {
+            motionVideoPreview.src = '';
+            motionVideoPreview.classList.add('hidden');
+        }
+        
         showSection(uploadSection);
         hideSection(previewSection);
+        hideSection(resultSection);
+        hideSection(processingSection);
         updateGenerateBtnVisibility(false);
+        
+        // 自动滚动到顶部
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+        
+        showNotification('已重置，请重新上传视频', 'info');
     }
     
     function showSection(section) {
