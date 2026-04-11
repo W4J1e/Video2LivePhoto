@@ -118,24 +118,30 @@
             <!-- 结果区域 -->
             <section id="resultSection" class="mb-8 hidden">
                 <h3 class="text-xl font-semibold text-gray-700 mb-4">生成成功</h3>
-                <div class="bg-gray-50 rounded-lg p-4 mb-4">
-                    <div class="flex items-center justify-between mb-3 gap-2">
-                        <span id="fileSizeDisplay" class="text-sm text-gray-500 italic"></span>
-                        <div class="flex gap-2">
-                            <button id="playVideoBtn" class="bg-secondary text-white px-3 py-1.5 rounded-lg hover:bg-secondary/90 transition-all active:scale-95 flex items-center shadow-sm">
-                                <i class="fa fa-play mr-1.5"></i> 播放
-                            </button>
-                            <button id="downloadBtn" class="bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-all active:scale-95 flex items-center shadow-sm">
-                                <i class="fa fa-download mr-1.5"></i> 下载
-                            </button>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- 左侧预览图 -->
+                    <div class="md:col-span-2">
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <span id="fileSizeDisplay" class="text-sm text-gray-500 italic block mb-3"></span>
+                            <div class="w-full max-w-xs mx-auto">
+                                <img id="resultPreview" class="w-full h-auto max-h-64 object-contain rounded-lg shadow-md" alt="动态照片封面">
+                                <video id="motionVideoPreview" class="w-full h-auto max-h-64 object-contain rounded-lg shadow-md hidden" controls></video>
+                            </div>
                         </div>
                     </div>
-                    <img id="resultPreview" class="w-full h-auto rounded-lg shadow-md" alt="动态照片封面">
-                    <video id="motionVideoPreview" class="w-full h-auto rounded-lg shadow-md hidden" controls></video>
+                    <!-- 右侧功能按钮 -->
+                    <div class="flex flex-col justify-center gap-4">
+                        <button id="playVideoBtn" class="bg-secondary text-white px-4 py-3 rounded-lg hover:bg-secondary/90 transition-all active:scale-95 flex items-center justify-center shadow-sm text-base">
+                            <i class="fa fa-play mr-2"></i> 播放预览
+                        </button>
+                        <button id="downloadBtn" class="bg-primary text-white px-4 py-3 rounded-lg hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center shadow-sm text-base">
+                            <i class="fa fa-download mr-2"></i> 下载文件
+                        </button>
+                        <button id="convertAnotherBtn" class="bg-gray-200 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-300 transition-colors duration-300 flex items-center justify-center text-base">
+                            <i class="fa fa-refresh mr-2"></i> 转换另一张
+                        </button>
+                    </div>
                 </div>
-                <button id="convertAnotherBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors duration-300">
-                    <i class="fa fa-refresh mr-1"></i> 转换另一张
-                </button>
             </section>
 
             <!-- 格式选择和生成按钮 -->
