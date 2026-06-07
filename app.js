@@ -1,345 +1,291 @@
-// 导入依赖类
+// app.js
 import { VideoProcessor } from './script/core/video-processor.js';
 import { LivePhotoBuilder } from './script/core/livephoto-builder.js';
-
-// 通知功能
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.classList.add('show');
-    }, 10);
-    
-    setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => {
-            document.body.removeChild(notification);
-        }, 300);
-    }, 3000);
-}
-
-// 添加通知样式
-const style = document.createElement('style');
-style.textContent = `
-    .notification {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 12px 24px;
-        border-radius: 4px;
-        color: white;
-        background: #333;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        transform: translateY(100px);
-        opacity: 0;
-        transition: all 0.3s ease;
-        z-index: 1000;
-    }
-    .notification.show {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    .notification.error {
-        background: #ff4444;
-    }
-    .notification.success {
-        background: #00C851;
-    }
-    .notification.info {
-        background: #33b5e5;
-    }
-`;
-document.head.appendChild(style);
-
-// 全局变量声明
-const videoProcessor = new VideoProcessor();
-const livePhotoBuilder = new LivePhotoBuilder(videoProcessor);
-let selectedVideo = null;
-let coverImage = null;
-let videoDuration = 0;
-
-// DOM元素引用
-const uploadSection = document.getElementById('uploadSection');
-const previewSection = document.getElementById('previewSection');
-const processingSection = document.getElementById('processingSection');
-const resultSection = document.getElementById('resultSection');
-const fileInput = document.getElementById('fileInput');
-const videoPreview = document.getElementById('videoPreview');
-const coverPreview = document.getElementById('coverPreview');
-const startTimeInput = document.getElementById('startTime');
-const endTimeInput = document.getElementById('endTime');
-const startTimeVal = document.getElementById('startTimeVal');
-const endTimeVal = document.getElementById('endTimeVal');
-const generateBtn = document.getElementById('generateBtn');
-const progressBar = document.getElementById('progressBar');
-const progressText = document.getElementById('progressText');
-const downloadBtn = document.getElementById('downloadBtn');
-const convertAnotherBtn = document.getElementById('convertAnotherBtn');
-const resultPreview = document.getElementById('resultPreview');
+import { showNotification } from './script/utils/ui-helper.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    initEventListeners();
-    updateGenerateBtnVisibility(false);
+    const videoProcessor = new VideoProcessor();
+    const livePhotoBuilder = new LivePhotoBuilder(videoProcessor);
 
-    function initEventListeners() {
-        // 文件上传
-        fileInput.addEventListener('change', handleFileSelection);
+    // DOM元素引用
+    const fileInput = document.getElementById('fileInput');
+    const videoInput = document.getElementById('videoInput');
+    const uploadArea = document.getElementById('uploadArea');
+    const previewSection = document.getElementById('previewSection');
+    const processingSection = document.getElementById('processingSection');
+    const resultSection = document.getElementById('resultSection');
+    const videoPreview = document.getElementById('videoPreview');
+    const coverPreview = document.getElementById('coverPreview');
+    const startTimeSlider = document.getElementById('startTime');
+    const endTimeSlider = document.getElementById('endTime');
+    const startTimeVal = document.getElementById('startTimeVal');
+    const endTimeVal = document.getElementById('endTimeVal');
+    const generateBtn = document.getElementById('generateBtn');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
 
-        // 使用静态帧作为封面
-        document.getElementById('useStaticFrameBtn')?.addEventListener('click', async () => {
-            if (!selectedVideo) return;
-            coverImage = await videoProcessor.extractCoverFrame(0);
-            coverPreview.src = URL.createObjectURL(coverImage);
-        });
+    let selectedVideoFile = null;
+    let selectedCoverFile = null;
 
-        // 上传照片作为封面
-        document.getElementById('photoUpload')?.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                coverPreview.src = event.target.result;
-                fetch(event.target.result)
-                    .then(res => res.blob())
-                    .then(blob => { coverImage = blob; });
-            };
-            reader.readAsDataURL(file);
+    // 显示/隐藏区域
+    function showSection(section) {
+        [previewSection, resultSection].forEach(s => {
+            if (s) s.classList.add('hidden');
         });
-
-        // 生成Live Photo
-        generateBtn.addEventListener('click', generateLivePhoto);
-        convertAnotherBtn.addEventListener('click', resetApp);
-        startTimeInput.addEventListener('input', () => {
-            updateTimeDisplay();
-            videoProcessor.isTrimmed = true;
-        });
-        endTimeInput.addEventListener('input', () => {
-            updateTimeDisplay();
-            videoProcessor.isTrimmed = true;
-        });
-        videoPreview.addEventListener('loadedmetadata', () => {
-            videoDuration = videoPreview.duration;
-            initTimeRange();
-        });
-
-        // 播放动态效果
-        document.getElementById('playVideoBtn')?.addEventListener('click', () => {
-            const motionVideoPreview = document.getElementById('motionVideoPreview');
-            if (motionVideoPreview) {
-                motionVideoPreview.classList.remove('hidden');
-                resultPreview.classList.add('hidden');
-                motionVideoPreview.muted = false; // 播放预览时取消静音
-                motionVideoPreview.volume = 1.0;
-                motionVideoPreview.play();
-            }
-        });
+        if (section) section.classList.remove('hidden');
     }
-    
-    async function handleFileSelection(event) {
-        selectedVideo = event.target.files[0];
-        if (!selectedVideo) return;
 
-        try {
-            // 显示加载状态
-            showNotification('正在加载视频, 请稍候...', 'info');
-            
-            // 加载视频元数据
-            await videoProcessor.loadVideo(selectedVideo);
-            
-            // 更新预览界面
-            videoPreview.src = URL.createObjectURL(selectedVideo);
-            
-            // 提取第一帧作为封面
-            coverImage = await videoProcessor.extractCoverFrame(0);
-            coverPreview.src = URL.createObjectURL(coverImage);
-            
-            showSection(previewSection);
-            hideSection(uploadSection);
-            updateGenerateBtnVisibility(true);
-            
-            showNotification('视频加载成功', 'success');
-        } catch (error) {
-            console.error('视频加载失败:', error);
-            showNotification(`加载失败: ${error.message}`, 'error');
-            // 重置输入框以便重新选择
-            fileInput.value = '';
+    function updateProgress(percent, text) {
+        if (progressBar) progressBar.style.width = `${percent}%`;
+        if (progressText) progressText.textContent = text;
+    }
+
+    function showProcessing(show) {
+        if (processingSection) {
+            if (show) {
+                processingSection.classList.remove('hidden');
+            } else {
+                processingSection.classList.add('hidden');
+            }
         }
     }
-    
-    async function generateLivePhoto() {
-        try {
-            showSection(processingSection);
-            updateProgress(0, '开始处理...');
-            
-            // 获取输出格式
-            const formatSelect = document.getElementById('format-select');
-            const format = formatSelect ? formatSelect.value : 'google';
 
-        // 验证时间参数
-        const startTime = parseFloat(startTimeInput.value);
-        const endTime = parseFloat(endTimeInput.value);
-        if (startTime >= endTime) {
-            throw new Error('开始时间必须小于结束时间');
+    // 格式化时间显示
+    function formatTime(seconds) {
+        return `${seconds.toFixed(1)}s`;
+    }
+
+    // 处理文件选择
+    async function handleFileSelect(file) {
+        if (!file) return;
+
+        // 验证文件类型
+        if (!file.type.startsWith('video/')) {
+            showNotification('请选择视频文件', 'error');
+            return;
         }
 
-        // 强制设置转码标志，以解决群晖兼容性问题
-        videoProcessor.isTrimmed = true; 
+        selectedVideoFile = file;
+        showProcessing(true);
+        updateProgress(10, '正在加载视频...');
 
-        // 提取视频帧
-        updateProgress(20, '正在提取视频帧...');
-            videoProcessor.videoElement.lastStartTime = startTime;
-            videoProcessor.videoElement.lastEndTime = endTime;
-            const frames = await videoProcessor.extractFrames(startTime, endTime, 15);
-            if (!Array.isArray(frames) || frames.length === 0) {
-                throw new Error('无法提取有效的视频帧');
-            }
-            console.log('成功提取视频帧:', frames.length);
+        try {
+            // 加载视频
+            await videoProcessor.loadVideo(file);
+            const duration = videoProcessor.videoElement.duration;
 
-            // 设置Live Photo参数
-            updateProgress(50, '正在准备动态照片...');
-            livePhotoBuilder.setCoverImage(coverImage);
-            livePhotoBuilder.setVideoFrames(frames, (endTime - startTime) / frames.length);
+            updateProgress(20, '视频加载完成，初始化预览...');
 
-            // 生成Live Photo
-            updateProgress(70, '正在生成动态照片...');
-            const result = await livePhotoBuilder.build(format);
-            if (!result || !result.blob) {
-                throw new Error('生成动态照片失败');
+            // 设置预览
+            if (videoPreview) {
+                videoPreview.src = URL.createObjectURL(file);
             }
 
-            const livePhotoBlob = result.blob;
-            const fileName = result.fileName;
+            // 配置时间滑块
+            if (startTimeSlider && endTimeSlider) {
+                startTimeSlider.max = duration;
+                endTimeSlider.max = duration;
+                startTimeSlider.value = 0;
+                endTimeSlider.value = Math.min(3, duration);
 
-            // 显示结果
-            updateProgress(100, '处理完成!');
-            
-            const motionVideoPreview = document.getElementById('motionVideoPreview');
-            if (motionVideoPreview && result.type !== 'apple') {
-                // 如果是 Google 格式，由于视频追加在 JPG 末尾，直接给 src 可能不识别
-                // 我们在 builder.build 中其实已经有了合并后的视频数据，但没有直接返回
-                // 这里为了预览正常，我们从 livePhotoBlob 中提取视频部分，或者直接让预览播放原始选取的片段
-                motionVideoPreview.src = videoPreview.src;
-                motionVideoPreview.currentTime = startTime; 
-                
-                // 移除之前的循环播放逻辑，改为播放一次
-                motionVideoPreview.ontimeupdate = null;
-                motionVideoPreview.onended = () => {
-                    motionVideoPreview.currentTime = startTime;
+                startTimeVal.textContent = formatTime(0);
+                endTimeVal.textContent = formatTime(Math.min(3, duration));
+
+                // 监听滑块变化
+                startTimeSlider.oninput = () => {
+                    const start = parseFloat(startTimeSlider.value);
+                    const end = parseFloat(endTimeSlider.value);
+                    if (start >= end) {
+                        startTimeSlider.value = end - 0.1;
+                    }
+                    startTimeVal.textContent = formatTime(parseFloat(startTimeSlider.value));
+                    videoPreview.currentTime = parseFloat(startTimeSlider.value);
+                };
+
+                endTimeSlider.oninput = () => {
+                    const start = parseFloat(startTimeSlider.value);
+                    const end = parseFloat(endTimeSlider.value);
+                    if (end <= start) {
+                        endTimeSlider.value = start + 0.1;
+                    }
+                    endTimeVal.textContent = formatTime(parseFloat(endTimeSlider.value));
                 };
             }
 
-            if (result.type === 'apple') {
-                // Apple格式是ZIP，无法预览图片，使用封面预览作为占位
-                resultPreview.src = coverPreview.src;
-            } else {
-                resultPreview.src = URL.createObjectURL(livePhotoBlob);
-            }
-            
-            // 更新文件大小显示
-            const fileSizeDisplay = document.getElementById('fileSizeDisplay');
-            if (fileSizeDisplay) {
-                const sizeMB = (livePhotoBlob.size / (1024 * 1024)).toFixed(2);
-                fileSizeDisplay.textContent = `文件大小: ${sizeMB} MB (${result.type === 'apple' ? 'ZIP包' : 'JPG图片'})`;
+            // 提取默认封面
+            updateProgress(30, '提取封面...');
+            const coverBlob = await videoProcessor.extractCoverFrame(0);
+            if (coverPreview) {
+                coverPreview.src = URL.createObjectURL(coverBlob);
+                livePhotoBuilder.setCoverImage(coverBlob);
             }
 
-            showSection(resultSection);
-            hideSection(processingSection);
-            
-            // 设置下载功能
-            downloadBtn.onclick = () => {
-                if (typeof saveAs !== 'undefined') {
-                    saveAs(livePhotoBlob, fileName);
-                } else {
-                    const url = URL.createObjectURL(livePhotoBlob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                    }, 100);
-                }
-            };
-
-        } catch (error) {
-            console.error('生成动态照片失败:', error);
-            updateProgress(0, `错误: ${error.message}`);
+            updateProgress(40, '准备就绪');
             showSection(previewSection);
-            // 显示错误通知
-            showNotification(`生成失败: ${error.message}`, 'error');
+            if (generateBtn) generateBtn.classList.remove('hidden');
+
+            showNotification('视频加载成功', 'success');
+        } catch (error) {
+            console.error('视频加载失败:', error);
+            showNotification('视频加载失败: ' + error.message, 'error');
+            showSection(null);
         }
     }
-    
-    function updateProgress(percent = 0, message = '') {
-        progressBar.style.width = `${percent}%`;
-        progressText.textContent = message;
-    }
-    
-    function resetApp() {
-        // 清理旧资源，防止内存泄漏
-        if (videoPreview.src) URL.revokeObjectURL(videoPreview.src);
-        if (coverPreview.src) URL.revokeObjectURL(coverPreview.src);
-        if (resultPreview.src) URL.revokeObjectURL(resultPreview.src);
-        
-        selectedVideo = null;
-        coverImage = null;
-        fileInput.value = '';
-        videoPreview.src = '';
-        coverPreview.src = '';
-        resultPreview.src = '';
-        
-        const motionVideoPreview = document.getElementById('motionVideoPreview');
-        if (motionVideoPreview) {
-            motionVideoPreview.src = '';
-            motionVideoPreview.classList.add('hidden');
-        }
-        
-        showSection(uploadSection);
-        hideSection(previewSection);
-        hideSection(resultSection);
-        hideSection(processingSection);
-        updateGenerateBtnVisibility(false);
-        
-        // 自动滚动到顶部
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth'
+
+    // 文件输入选择
+    fileInput?.addEventListener('change', (e) => {
+        handleFileSelect(e.target.files[0]);
+    });
+
+    // 兼容videoInput
+    videoInput?.addEventListener('change', (e) => {
+        handleFileSelect(e.target.files[0]);
+    });
+
+    // 拖拽上传
+    if (uploadArea) {
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('border-primary/50', 'bg-primary/5');
         });
-        
-        showNotification('已重置，请重新上传视频', 'info');
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('border-primary/50', 'bg-primary/5');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('border-primary/50', 'bg-primary/5');
+            const file = e.dataTransfer.files[0];
+            handleFileSelect(file);
+        });
+
+        // 注意：不需要添加 click 事件，因为 HTML 中 uploadArea 内的 <label> 已经自动处理了文件选择
     }
-    
-    function showSection(section) {
-        section?.classList.remove('hidden');
-    }
-    
-    function hideSection(section) {
-        section?.classList.add('hidden');
-    }
-    
-    function updateGenerateBtnVisibility(visible) {
-        generateBtn?.classList.toggle('hidden', !visible);
-    }
-    
-    function initTimeRange() {
-        startTimeInput.min = 0;
-        startTimeInput.max = videoDuration;
-        startTimeInput.value = 0;
-        endTimeInput.min = 0.1;
-        endTimeInput.max = videoDuration;
-        endTimeInput.value = Math.min(3, videoDuration);
-        updateTimeDisplay();
-    }
-    
-    function updateTimeDisplay() {
-        startTimeVal.textContent = `${startTimeInput.value}s`;
-        endTimeVal.textContent = `${endTimeInput.value}s`;
-    }
+
+    // 封面选择
+    document.getElementById('photoUpload')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file || !file.type.startsWith('image/')) {
+            showNotification('请选择图片文件', 'error');
+            return;
+        }
+        selectedCoverFile = file;
+        if (coverPreview) {
+            coverPreview.src = URL.createObjectURL(file);
+        }
+        livePhotoBuilder.setCoverImage(file);
+        showNotification('封面已更新', 'success');
+    });
+
+    // 生成LivePhoto
+    generateBtn?.addEventListener('click', async () => {
+        if (!selectedVideoFile) {
+            showNotification('请先选择视频文件', 'error');
+            return;
+        }
+
+        const startTime = parseFloat(startTimeSlider?.value || 0);
+        const endTime = parseFloat(endTimeSlider?.value || 3);
+        const formatSelect = document.getElementById('format-select');
+        const selectedFormat = formatSelect?.value || 'auto';
+
+        if (startTime >= endTime) {
+            showNotification('开始时间必须小于结束时间', 'error');
+            return;
+        }
+
+        showProcessing(true);
+        generateBtn.disabled = true;
+
+        try {
+            // 步骤1: 提取视频帧
+            updateProgress(10, `正在提取视频帧 (${formatTime(startTime)} - ${formatTime(endTime)})...`);
+
+            const frames = await videoProcessor.extractFrames(
+                startTime,
+                endTime,
+                30, // 使用30fps
+                (progress) => {
+                    const overallProgress = 10 + Math.floor(progress * 0.4);
+                    updateProgress(overallProgress, `提取视频帧中... ${progress}%`);
+                }
+            );
+
+            // 步骤2: 设置视频帧
+            livePhotoBuilder.setVideoFrames(frames, endTime - startTime);
+            updateProgress(55, '正在构建LivePhoto...');
+
+            // 步骤3: 构建LivePhoto
+            const livePhotoResult = await livePhotoBuilder.build(selectedFormat);
+            updateProgress(90, '处理完成，准备下载...');
+
+            // 显示结果
+            showSection(resultSection);
+
+            // 设置预览
+            const resultPreview = document.getElementById('resultPreview');
+            const fileSizeDisplay = document.getElementById('fileSizeDisplay');
+            if (resultPreview) {
+                resultPreview.src = URL.createObjectURL(livePhotoResult.blob);
+            }
+            if (fileSizeDisplay) {
+                const sizeMB = (livePhotoResult.blob.size / (1024 * 1024)).toFixed(2);
+                fileSizeDisplay.textContent = `文件大小: ${sizeMB} MB`;
+            }
+
+            // 下载按钮
+            const downloadBtn = document.getElementById('downloadBtn');
+            if (downloadBtn) {
+                downloadBtn.onclick = () => {
+                    if (typeof saveAs !== 'undefined') {
+                        saveAs(livePhotoResult.blob, livePhotoResult.fileName);
+                    } else {
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(livePhotoResult.blob);
+                        a.download = livePhotoResult.fileName;
+                        a.click();
+                        URL.revokeObjectURL(a.href);
+                    }
+                };
+            }
+
+            // 播放预览按钮
+            const playVideoBtn = document.getElementById('playVideoBtn');
+            if (playVideoBtn) {
+                playVideoBtn.onclick = () => {
+                    if (livePhotoResult.type === 'apple') {
+                        showNotification('Apple LivePhoto需要在设备上查看', 'info');
+                        return;
+                    }
+                    const motionVideoPreview = document.getElementById('motionVideoPreview');
+                    if (motionVideoPreview) {
+                        motionVideoPreview.src = URL.createObjectURL(livePhotoResult.blob);
+                        motionVideoPreview.classList.remove('hidden');
+                        motionVideoPreview.play();
+                        resultPreview?.classList.add('hidden');
+                    }
+                };
+            }
+
+            updateProgress(100, '生成成功!');
+            showNotification('LivePhoto生成成功!', 'success');
+        } catch (error) {
+            console.error('生成失败:', error);
+            showNotification('处理失败: ' + error.message, 'error');
+            showSection(previewSection);
+        } finally {
+            generateBtn.disabled = false;
+        }
+    });
+
+    // 转换另一个
+    document.getElementById('convertAnotherBtn')?.addEventListener('click', () => {
+        selectedVideoFile = null;
+        selectedCoverFile = null;
+        if (fileInput) fileInput.value = '';
+        showSection(null);
+        if (generateBtn) generateBtn.classList.add('hidden');
+        videoProcessor.cleanup();
+    });
 });
