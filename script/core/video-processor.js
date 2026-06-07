@@ -30,22 +30,29 @@ export class VideoProcessor {
             const cleanup = () => {
                 clearTimeout(timeout);
                 clearTimeout(canplayFallbackTimer);
+                clearTimeout(loadedMetadataTimer);
                 this.videoElement.oncanplaythrough = null;
                 this.videoElement.oncanplay = null;
+                this.videoElement.onloadedmetadata = null;
                 this.videoElement.onerror = null;
             };
 
             let canplayFallbackTimer = null;
+            let loadedMetadataTimer = null;
             let resolved = false;
             const doResolve = () => {
                 if (resolved) return;
                 resolved = true;
                 cleanup();
-                console.log(`视频加载完成: ${this.videoElement.videoWidth}x${this.videoElement.videoHeight}, 时长: ${this.videoElement.duration.toFixed(2)}s, readyState: ${this.videoElement.readyState}`);
+                const canPlay = this.videoElement.readyState >= 3;
+                console.log(`视频加载完成: ${this.videoElement.videoWidth}x${this.videoElement.videoHeight}, 时长: ${this.videoElement.duration.toFixed(2)}s, readyState: ${this.videoElement.readyState}, 可播放: ${canPlay}`);
+                if (!canPlay) {
+                    console.warn('视频编码浏览器无法解码，将使用原始视频模式（不支持剪辑）');
+                }
                 resolve(this.videoElement);
             };
 
-            // 等待 canplaythrough（整个视频已缓冲，适合大文件/4K视频seek）
+            // 等待 canplaythrough（整个视频已缓冲，适合可播放的视频）
             this.videoElement.oncanplaythrough = doResolve;
             
             // fallback: canplay 触发后等待5秒，如果 canplaythrough 还没触发则由 canplay 兜底
@@ -56,11 +63,56 @@ export class VideoProcessor {
                     }
                 }, 5000);
             };
+
+            // 终极 fallback: 如果浏览器不支持该编码（如 HEVC），则等待 loadedmetadata
+            // 只需要元数据（时长、尺寸），不需要解码视频帧
+            this.videoElement.onloadedmetadata = () => {
+                // 给 canplaythrough/canplay 一些时间
+                loadedMetadataTimer = setTimeout(() => {
+                    if (this.videoElement.readyState < 3) {
+                        doResolve(); // 元数据已加载，但无法播放（HEVC等）
+                    }
+                }, 8000);
+            };
             
             this.videoElement.onerror = () => {
-                cleanup();
                 const error = this.videoElement.error;
-                const msg = error ? `视频加载失败 (code: ${error.code})` : '视频格式不支持或文件损坏';
+                clearTimeout(timeout);
+                
+                if (error && (error.code === 3 || error.code === 4)) {
+                    // 解码错误或格式不支持，可能是HEVC编码
+                    // 不立即拒绝，尝试通过 loadedmetadata 兜底
+                    const fallbackMsg = error.code === 3 
+                        ? '视频解码失败，可能是HEVC编码。尝试使用原始视频模式...'
+                        : '视频格式不支持，可能是HEVC编码。尝试使用原始视频模式...';
+                    console.warn(fallbackMsg);
+                    
+                    // 给 loadedmetadata 2秒时间（如果还没触发，说明元数据也无法读取）
+                    loadedMetadataTimer = setTimeout(() => {
+                        if (this.videoElement.duration && !isNaN(this.videoElement.duration) && this.videoElement.videoWidth) {
+                            console.log('通过 loadedmetadata 加载成功（HEVC编码，无法解码但可直接使用原始视频）');
+                            doResolve();
+                        } else {
+                            reject(new Error('视频文件完全不支持，请转换为 H.264 + AAC 编码的 MP4 文件'));
+                        }
+                    }, 2000);
+                    return;
+                }
+                
+                // 其他错误，直接拒绝
+                let msg = '视频格式不支持或文件损坏';
+                if (error) {
+                    switch (error.code) {
+                        case 1:
+                            msg = '视频加载被中止';
+                            break;
+                        case 2:
+                            msg = '网络错误，视频加载失败';
+                            break;
+                        default:
+                            msg = `视频加载失败 (code: ${error.code})`;
+                    }
+                }
                 reject(new Error(msg));
             };
         });

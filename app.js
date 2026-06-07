@@ -27,6 +27,64 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedVideoFile = null;
     let selectedCoverFile = null;
 
+    // 生成占位封面（用于无法解码的视频，如HEVC）
+    async function _generatePlaceholderCover(width, height) {
+        const canvas = document.createElement('canvas');
+        // 限制封面尺寸，不需要太大
+        const maxCoverSize = 800;
+        const scale = Math.min(1, maxCoverSize / Math.max(width, height));
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+
+        const ctx = canvas.getContext('2d');
+
+        // 深色背景
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 绘制渐变效果
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#16213e');
+        gradient.addColorStop(0.5, '#0f3460');
+        gradient.addColorStop(1, '#1a1a2e');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 绘制图标
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        const iconSize = Math.min(canvas.width, canvas.height) * 0.3;
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2 - iconSize * 0.3;
+
+        // 播放按钮三角形
+        ctx.beginPath();
+        ctx.moveTo(cx - iconSize * 0.25, cy - iconSize * 0.4);
+        ctx.lineTo(cx - iconSize * 0.25, cy + iconSize * 0.4);
+        ctx.lineTo(cx + iconSize * 0.35, cy);
+        ctx.closePath();
+        ctx.fill();
+
+        // 文字
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.font = `${Math.round(iconSize * 0.35)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('HEVC 编码视频', cx, cy + iconSize * 0.7);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.font = `${Math.round(iconSize * 0.22)}px sans-serif`;
+        ctx.fillText('无法调节时长，需要手动添加封面', cx, cy + iconSize * 1.1);
+
+        // 视频信息
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = `${Math.round(iconSize * 0.18)}px sans-serif`;
+        ctx.fillText(`${width}x${height}`, cx, canvas.height - iconSize * 0.4);
+
+        return new Promise(resolve => {
+            canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
+        });
+    }
+
     // 显示/隐藏区域
     function showSection(section) {
         [previewSection, resultSection].forEach(s => {
@@ -73,10 +131,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // 加载视频
             await videoProcessor.loadVideo(file);
             const duration = videoProcessor.videoElement.duration;
+            const canDecode = videoProcessor.videoElement.readyState >= 3;
 
             updateProgress(20, '视频加载完成，初始化预览...');
 
-            // 设置预览
+            // 设置预览（HEVC视频可能无法预览，但可以使用）
             if (videoPreview) {
                 videoPreview.src = URL.createObjectURL(file);
             }
@@ -86,35 +145,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 startTimeSlider.max = duration;
                 endTimeSlider.max = duration;
                 startTimeSlider.value = 0;
-                endTimeSlider.value = Math.min(3, duration);
+
+                // 如果无法解码，禁用滑块调整（因为无法预览剪辑）
+                if (!canDecode) {
+                    endTimeSlider.value = duration; // HEVC：默认使用完整视频
+                    startTimeSlider.disabled = true;
+                    endTimeSlider.disabled = true;
+                    startTimeSlider.title = 'HEVC编码视频不支持预览和剪辑';
+                    endTimeSlider.title = 'HEVC编码视频不支持预览和剪辑';
+                    showNotification('视频编码无法预览，将使用原始视频直接生成', 'warning');
+                } else {
+                    endTimeSlider.value = Math.min(3, duration);
+                    startTimeSlider.disabled = false;
+                    endTimeSlider.disabled = false;
+                    startTimeSlider.title = '';
+                    endTimeSlider.title = '';
+
+                    // 监听滑块变化
+                    startTimeSlider.oninput = () => {
+                        const start = parseFloat(startTimeSlider.value);
+                        const end = parseFloat(endTimeSlider.value);
+                        if (start >= end) {
+                            startTimeSlider.value = end - 0.1;
+                        }
+                        startTimeVal.textContent = formatTime(parseFloat(startTimeSlider.value));
+                        videoPreview.currentTime = parseFloat(startTimeSlider.value);
+                    };
+
+                    endTimeSlider.oninput = () => {
+                        const start = parseFloat(startTimeSlider.value);
+                        const end = parseFloat(endTimeSlider.value);
+                        if (end <= start) {
+                            endTimeSlider.value = start + 0.1;
+                        }
+                        endTimeVal.textContent = formatTime(parseFloat(endTimeSlider.value));
+                    };
+                }
 
                 startTimeVal.textContent = formatTime(0);
-                endTimeVal.textContent = formatTime(Math.min(3, duration));
-
-                // 监听滑块变化
-                startTimeSlider.oninput = () => {
-                    const start = parseFloat(startTimeSlider.value);
-                    const end = parseFloat(endTimeSlider.value);
-                    if (start >= end) {
-                        startTimeSlider.value = end - 0.1;
-                    }
-                    startTimeVal.textContent = formatTime(parseFloat(startTimeSlider.value));
-                    videoPreview.currentTime = parseFloat(startTimeSlider.value);
-                };
-
-                endTimeSlider.oninput = () => {
-                    const start = parseFloat(startTimeSlider.value);
-                    const end = parseFloat(endTimeSlider.value);
-                    if (end <= start) {
-                        endTimeSlider.value = start + 0.1;
-                    }
-                    endTimeVal.textContent = formatTime(parseFloat(endTimeSlider.value));
-                };
+                endTimeVal.textContent = formatTime(parseFloat(endTimeSlider.value));
             }
 
-            // 提取默认封面
+            // 提取默认封面（HEVC视频无法提取，生成占位封面）
             updateProgress(30, '提取封面...');
-            const coverBlob = await videoProcessor.extractCoverFrame(0);
+            let coverBlob;
+            if (canDecode) {
+                coverBlob = await videoProcessor.extractCoverFrame(0);
+            } else {
+                // HEVC视频：生成一个占位封面
+                coverBlob = await _generatePlaceholderCover(
+                    videoProcessor.videoElement.videoWidth,
+                    videoProcessor.videoElement.videoHeight
+                );
+                console.log('HEVC视频无法解码，已生成占位封面');
+                showNotification('HEVC视频无法预览封面，建议手动添加封面图片', 'warning');
+            }
             if (coverPreview) {
                 coverPreview.src = URL.createObjectURL(coverBlob);
                 livePhotoBuilder.setCoverImage(coverBlob);
@@ -185,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const videoDuration = videoProcessor.videoElement.duration;
         const startTime = parseFloat(startTimeSlider?.value || 0);
         const endTime = parseFloat(endTimeSlider?.value || 3);
         const formatSelect = document.getElementById('format-select');
@@ -195,26 +281,40 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 判断是否使用了自定义剪辑（如果时间范围不等于整个视频，则视为剪辑）
+        const isTrimmed = (startTime > 0.05) || (endTime < videoDuration - 0.05);
+        videoProcessor.isTrimmed = isTrimmed;
+
         showProcessing(true);
         generateBtn.disabled = true;
 
         try {
-            // 步骤1: 提取视频帧
-            updateProgress(10, `正在提取视频帧 (${formatTime(startTime)} - ${formatTime(endTime)})...`);
+            // 判断是否使用原始视频（未剪辑时直接使用原始视频，保留HEVC编码）
+            if (!isTrimmed) {
+                console.log('未剪辑视频，直接使用原始视频（保留原始编码，如HEVC）');
+                updateProgress(10, '正在构建LivePhoto（使用原始视频）...');
+                // 不需要提取帧，livephoto-builder 会自动使用 originalBlob
+                livePhotoBuilder.setVideoFrames([], videoDuration);
+                updateProgress(50, '正在生成LivePhoto...');
+            } else {
+                // 步骤1: 提取视频帧（仅当用户剪辑时才需要重新编码）
+                console.log(`检测到视频剪辑: ${formatTime(startTime)} - ${formatTime(endTime)}`);
+                updateProgress(10, `正在提取视频帧 (${formatTime(startTime)} - ${formatTime(endTime)})...`);
 
-            const frames = await videoProcessor.extractFrames(
-                startTime,
-                endTime,
-                30, // 使用30fps
-                (progress) => {
-                    const overallProgress = 10 + Math.floor(progress * 0.4);
-                    updateProgress(overallProgress, `提取视频帧中... ${progress}%`);
-                }
-            );
+                const frames = await videoProcessor.extractFrames(
+                    startTime,
+                    endTime,
+                    30, // 使用30fps
+                    (progress) => {
+                        const overallProgress = 10 + Math.floor(progress * 0.4);
+                        updateProgress(overallProgress, `提取视频帧中... ${progress}%`);
+                    }
+                );
 
-            // 步骤2: 设置视频帧
-            livePhotoBuilder.setVideoFrames(frames, endTime - startTime);
-            updateProgress(55, '正在构建LivePhoto...');
+                // 步骤2: 设置视频帧
+                livePhotoBuilder.setVideoFrames(frames, endTime - startTime);
+                updateProgress(55, '正在构建LivePhoto...');
+            }
 
             // 步骤3: 构建LivePhoto
             const livePhotoResult = await livePhotoBuilder.build(selectedFormat);
